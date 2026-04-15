@@ -1,0 +1,186 @@
+# %%
+import pandas as pd 
+import scipy.stats as stats
+import os
+import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
+from scipy.stats import norm, cauchy
+import numpy as np
+
+# %%
+'''data gathered over one day (84600 secs)
+divide the counts value by #seconds and then divide by the bin width (#/s/kev)'''
+df = pd.read_parquet('/Users/laurencadle/Downloads/singlesites.parquet')
+df.head(10)
+
+
+# %%
+#energy distribution and activation lines
+'''looking for activation lines and peaks
+next step: plot out peaks and fit a couple of different curves, try to fit something to the 511kev line,
+gaussian on 511 and 694 - try hyperbolic'''
+
+plt.figure(figsize=(10, 6))
+plt.hist(df['Energy'], bins=500, color = 'turquoise', edgecolor = 'black')
+plt.title('Energy Distribution with Activation Lines')
+plt.xlabel('Energy')
+plt.ylabel('Counts')
+
+plt.axvline(x=437, color='saddlebrown', linestyle='--', label='430 keV')
+plt.axvline(x=511, color='red', linestyle='--', label='511 keV')
+plt.axvline(x=596, color='gold', linestyle='--', label='600 keV')
+plt.axvline(x=694, color='blue', linestyle='--', label='694 keV')
+plt.axvline(x=835, color='green', linestyle='--', label='835 keV')
+plt.axvline(x=1018, color='blueviolet', linestyle='--', label='1050 keV')
+
+plt.xlim(0, 1200)
+plt.ylim(1e4, 1500000)
+plt.yscale('log')
+plt.legend()
+plt.show()
+
+
+# %%
+#fits for 511 keV line
+#gaussian
+mask = (df['Energy'] > 480) & (df['Energy'] < 540)
+dist = df['Energy'][mask].to_numpy()
+
+mu, sigma = norm.fit(dist)
+
+counts, bin_edges = np.histogram(df['Energy'], bins=500)
+bin_width = bin_edges[1] - bin_edges[0]
+
+x = np.linspace(bin_edges[0], bin_edges[-1], 500)
+pdf_gaussian = norm.pdf(x, mu, sigma)
+pdf_gaussian_scaled = pdf_gaussian * (len(dist) * bin_width)
+
+#lorentzian
+mu_l, gamma = cauchy.fit(dist)
+pdf_lorentzian = cauchy.pdf(x, mu_l, gamma)
+pdf_lorentzian_scaled = pdf_lorentzian * (len(dist) * bin_width)
+
+#hyperbolic
+'''put another variable (+c) to have the peaks appear over a flat background - a power law peak would be on top of the flat slope
+to add more complex shapes add more (+cx+d for example)'''
+def hyperbolic_pdf(x, mu, scale):
+    return (1 / (2 * scale)) * (1 / np.cosh((x - mu) / scale)) ** 2
+
+def hyperbolic_scaled(x, mu, scale):
+    return hyperbolic_pdf(x, mu, scale) * (len(dist) * bin_width)
+
+p0 = [511, 5]
+popt, _ = curve_fit(hyperbolic_scaled, x, hyperbolic_scaled(x, *[511, 5]), p0=p0)
+
+bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+peak_mask = (bin_centers > 480) & (bin_centers < 540)
+popt, _ = curve_fit(hyperbolic_scaled, bin_centers[peak_mask], counts[peak_mask], p0=p0)
+pdf_hyperbolic_scaled = hyperbolic_scaled(x, *popt)
+
+plt.figure(figsize=(10, 6))
+plt.hist(df['Energy'], bins=500, color='turquoise', edgecolor='black', label='Data', alpha=0.6)
+plt.title('Gaussian, Lorentzian, and Hyperbolic fits for the 511 keV activation line')
+plt.plot(x, pdf_gaussian_scaled, linewidth=2.2, linestyle='--', color='mediumvioletred', label=f'Gaussian\npeak = {mu:.2f}, std = {sigma:.2f}')
+plt.plot(x, pdf_lorentzian_scaled, linewidth=2.2, linestyle='--', color='darkorange', label=f'Lorentzian\npeak = {mu_l:.2f}, fwhm = {gamma:.2f}')
+plt.plot(x, pdf_hyperbolic_scaled, linewidth=2.2, linestyle='--', color='maroon', label=f'Hyperbolic\npeak = {popt[0]:.2f}, scale = {popt[1]:.2f}')
+plt.xlabel('Energy')
+plt.ylabel('Counts')
+plt.xlim(400, 620)
+plt.ylim(0, 150000)
+plt.legend()
+plt.show()
+
+# %%
+#fits for the 694 keV line
+#gaussian
+mask = (df['Energy'] > 680) & (df['Energy'] < 700)
+dist = df['Energy'][mask].to_numpy()
+
+mu, sigma = norm.fit(dist)
+
+counts, bin_edges = np.histogram(df['Energy'], bins=500)
+bin_width = bin_edges[1] - bin_edges[0]
+
+x = np.linspace(bin_edges[0], bin_edges[-1], 500)
+pdf_gaussian = norm.pdf(x, mu, sigma)
+pdf_gaussian_scaled = pdf_gaussian * (len(dist) * bin_width)
+
+#lorentzian
+mu_l, gamma = cauchy.fit(dist)
+pdf_lorentzian = cauchy.pdf(x, mu_l, gamma)
+pdf_lorentzian_scaled = pdf_lorentzian * (len(dist) * bin_width)
+
+#hyperbolic
+def hyperbolic_pdf(x, mu, scale):
+    return (1 / (2 * scale)) * (1 / np.cosh((x - mu) / scale)) ** 2
+
+def hyperbolic_scaled(x, mu, scale):
+    return hyperbolic_pdf(x, mu, scale) * (len(dist) * bin_width)
+
+p0 = [694, 5]
+popt, _ = curve_fit(hyperbolic_scaled, x, hyperbolic_scaled(x, *[694, 5]), p0=p0)
+
+bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+peak_mask = (bin_centers > 680) & (bin_centers < 710)
+popt, _ = curve_fit(hyperbolic_scaled, bin_centers[peak_mask], counts[peak_mask], p0=p0)
+'''let x1 = np.linspace(630, 760, 1000) and replace x wiht x1'''
+pdf_hyperbolic_scaled = hyperbolic_scaled(x, *popt)
+
+plt.figure(figsize=(10, 6))
+plt.hist(df['Energy'], bins=500, color='turquoise', edgecolor='black', label='Data', alpha=0.6)
+plt.title('Gaussian, Lorentzian, and Hyperbolic fits for the 694 keV activation line')
+'''define a new variable x1 that uses a different sampling that has more datapoints - x1 = np.linspace(630, 760, 1000)'''
+plt.plot(x, pdf_gaussian_scaled, linewidth=2.2, linestyle='--', color='mediumvioletred', label=f'Gaussian\npeak = {mu:.2f}, std = {sigma:.2f}')
+plt.plot(x, pdf_lorentzian_scaled, linewidth=2.2, linestyle='--', color='darkorange', label=f'Lorentzian\npeak = {mu_l:.2f}, fwhm = {gamma:.2f}')
+plt.plot(x, pdf_hyperbolic_scaled, linewidth=2.2, linestyle='--', color='maroon', label=f'Hyperbolic\npeak = {popt[0]:.2f}, scale = {popt[1]:.2f}')
+plt.xlabel('Energy')
+plt.ylabel('Counts')
+plt.xlim(630, 760)
+plt.ylim(0, 60000)
+plt.legend()
+plt.show()
+
+# %%
+#energy vs detector id
+'''try and see density (hist) of this
+try and plot the same thing for each of the 12 detectors'''
+plt.figure(figsize=(10, 6))
+#plt.scatter(df['Detector ID'], df['Energy'], color='turquoise', marker='o', edgecolor = 'black', alpha=0.6)
+plt.hist(sorted(df['Detector ID']))
+
+plt.title('Energy vs Detector ID')
+plt.xlabel('Detector ID')
+plt.ylabel('Energy (keV)')
+plt.show()
+
+# %% [markdown]
+# take out density = True
+# try counts per second or counts per second per KeV - guarding the height of the y axis with respect to the bin sizes
+# - separate bins will help give a sense of uniformity and get a sense of uniformity
+
+# %%
+from scipy.ndimage import gaussian_filter1d
+
+xmin, xmax = 0, 1200
+bin_number = 300
+bins = np.linspace(xmin, xmax, bin_number + 1)
+centers = (bins[:-1] + bins[1:]) / 2  
+
+for detector in range(12):
+    energies = df.loc[df['Detector ID'] == detector, 'Energy'].dropna().astype(float).values
+
+    counts, _ = np.histogram(energies, bins=bins)
+    #smooth_density = gaussian_filter1d(counts, sigma=1.5)
+'''use plt.hist not np.histogram to get counts output
+for time counts use np.histogram output for time scaling
+'''
+    plt.figure(figsize=(6, 4))
+    plt.fill_between(centers, smooth_density, step='mid', alpha=0.6, color='turquoise')
+    plt.plot(centers, smooth_density, color='navy', linewidth=1)
+    plt.title(f'Energy density for Detector ID {detector}')
+    plt.xlabel('Energy (keV)')
+    plt.ylabel('Density')
+    plt.xlim(xmin, xmax)
+    plt.show()
+
+

@@ -1,0 +1,95 @@
+#GENERALIZABLE LINE EMISSION CODE!!!!
+
+#choose the line of interest
+line = 'INSERT LINE'
+
+#find the slope:
+d2 = 'INSERT POINT'
+d1 = 'INSERT POINT'
+y2 = 'INSERT POINT'
+y1 = 'INSERT POINT'
+
+def slope(d2, d1, y2, y1):
+    return (y2 - y1) / (d2 - d1)
+slope_val = slope(d2, d1, y2, y1)
+
+#define energy lower bounds
+#a little dictionary of the lines i need to find soon: {'511': (500, 520),'596': (585, 605),'607': (596, 617),'438': (427, 447),'175': (164, 186),'93': (82, 104)}
+lower_bounds = 'INSERT BOUND'
+upper_bounds = 'INSERT BOUND'
+slim_lower = 'INSERT BOUND'
+slim_upper = 'INSERT BOUND'
+
+mask = (df['Energy'] > lower_bounds) & (df['Energy'] < upper_bounds)
+dist = df['Energy'][mask].to_numpy()
+
+N=2000
+counts, bin_edges = np.histogram(df['Energy'], bins=N)
+bin_width = bin_edges[1] - bin_edges[0]
+
+x = np.linspace(bin_edges[0], bin_edges[-1], N)
+
+bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+peak_mask = (bin_centers > slim_lower) & (bin_centers < slim_upper)
+
+#gaussian (NOW WITH PCOV/ERRORS)
+def gaussian_scaled(x, mu, sigma, c, d, A):
+    return norm.pdf(x, mu, sigma) * (A) * (len(dist) * bin_width) + c * x + d
+
+p0_gauss = [line, 2, slope_val, counts[peak_mask].min(),1000]
+popt_g, pcov_g = curve_fit(gaussian_scaled, bin_centers[peak_mask], counts[peak_mask], p0=p0_gauss, bounds=([slim_lower, 0.1, -500, -1e6, 0], [slim_upper, 10, 0, 1e6, np.inf]), maxfev=10000)
+p_err_g = np.sqrt(np.diag(pcov_g))
+x1 = np.linspace(lower_bounds, upper_bounds, 1001)
+fitted_model_g = gaussian_scaled(x1, *popt_g)
+pdf_gaussian_scaled = gaussian_scaled(x, *popt_g)
+#plt.plot(x1, fitted_model)
+#define a variable x1 with finer resolution
+
+#lorentzian
+def lorentzian_scaled(x, mu, gamma, c, d, A):
+    return cauchy.pdf(x, mu, gamma) * (A) * (len(dist) * bin_width) + c * x + d
+
+p0_lor = [line, 2, slope_val, counts[peak_mask].min(), 1000]
+popt_l, pcov_l = curve_fit(lorentzian_scaled, bin_centers[peak_mask], counts[peak_mask], p0=p0_lor, bounds=([slim_lower, 0.1, -500, -1e6, 0], [slim_upper, 10, 0, 1e6, np.inf]), maxfev=10000)
+p_err_l = np.sqrt(np.diag(pcov_l))
+x2 = np.linspace(lower_bounds, upper_bounds, 1001)
+fitted_model_l = lorentzian_scaled(x2, *popt_l)
+pdf_lorentzian_scaled = lorentzian_scaled(x, *popt_l)
+
+#hyperbolic
+def hyperbolic_pdf(x, mu, scale):
+    return (1 / (2 * scale)) * (1 / np.cosh((x - mu) / scale)) ** 2
+
+def hyperbolic_scaled(x, mu, scale, c, d):
+    return hyperbolic_pdf(x, mu, scale) * (len(dist) * bin_width) + c * x + d
+
+p0 = [line, 2, slope_val, counts[peak_mask].min()]
+popt, pcov_h = curve_fit(hyperbolic_scaled, bin_centers[peak_mask], counts[peak_mask], p0=p0, bounds=([slim_lower, 0.1, -500, -1e6], [slim_upper, 10, 0, 1e6]), maxfev=10000)
+p_err_h = np.sqrt(np.diag(pcov_h))
+x3 = np.linspace(lower_bounds, upper_bounds, 1001)
+fitted_model_h = hyperbolic_scaled(x3, *popt)
+pdf_hyperbolic_scaled = hyperbolic_scaled(x, *popt)
+
+#error prints!
+for name, po, pe in [('Gaussian', popt_g, p_err_g),('Lorentzian', popt_l, p_err_l),('Hyperbolic', popt, p_err_h)]:
+    print(f"{name}: mu={po[0]:.3f}±{pe[0]:.3f}, "f"width={po[1]:.3f}±{pe[1]:.3f}, "f"c={po[2]:.3f}±{pe[2]:.3f}, "f"d={po[3]:.3f}±{pe[3]:.3f}")
+
+plt.figure(figsize=(12, 10))
+#plt.plot(x1, fitted_model)
+#plt.hist(df['Energy'], bins=N, color='turquoise', edgecolor='black', label='Data', alpha=0.6)
+plt.stairs(counts, bin_edges, fill=True, color='turquoise', edgecolor='black', alpha=0.6, label='Data', linewidth=0.8)
+plt.title(f'Gaussian, Lorentzian, and Hyperbolic fits for the {line} keV activation line')
+plt.plot(x, pdf_gaussian_scaled, linewidth=2.2, linestyle='--', color='mediumvioletred', label=f'Gaussian\npeak = {popt_g[0]:.2f}, std = {popt_g[1]:.2f}, c = {popt_g[2]:.2f}, d = {popt_g[3]:.2f}')
+plt.plot(x, pdf_lorentzian_scaled, linewidth=2.2, linestyle='--', color='darkorange', label=f'Lorentzian\npeak = {popt_l[0]:.2f}, fwhm = {popt_l[1]:.2f}, c = {popt_l[2]:.2f}, d = {popt_l[3]:.2f}')
+plt.plot(x, pdf_hyperbolic_scaled, linewidth=2.2, linestyle='--', color='maroon', label=f'Hyperbolic\npeak = {popt[0]:.2f}, scale = {popt[1]:.2f}, c = {popt[2]:.2f}, d = {popt[3]:.2f}')
+plt.xlabel('Energy')
+plt.ylabel('Counts')
+plt.xlim(lower_bounds, upper_bounds)
+plt.ylim(0, 1e5)
+plt.axvspan(slim_lower, slim_upper, alpha=0.12, color='grey', label=f'Fit window ({slim_lower}–{slim_upper} keV)')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+#create variables to make bounds changes easier for fitting the other lines (596, 607, 438, 175, 93) - make this code workable for EVERY kind of line emission (easily editable for gaussians)
+#find uncertainties on amplitude estimate and tighten bounds - use line emissions from whole plot to get 

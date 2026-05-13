@@ -80,7 +80,7 @@ plt.plot(x2, fitted_model_l, color='darkorange', label=f'Lorentzian\npeak = {pop
 plt.plot(x3, fitted_model_h, color='maroon', label=f'Hyperbolic\npeak = {popt[0]:.2f}, scale = {popt[1]:.2f}, c = {popt[2]:.2f}, d = {popt[3]:.2f}')
 plt.xlabel('Energy')
 plt.ylabel('Counts')
-plt.xlim(slim_lower, slim_upper)
+plt.xlim(lower_bounds, upper_bounds)
 plt.ylim(0, 1e5)
 plt.axvspan(slim_lower, slim_upper, alpha=0.12, color='grey', label=f'Fit window ({slim_lower}–{slim_upper} keV)')
 plt.legend()

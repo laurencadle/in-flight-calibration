@@ -15,10 +15,10 @@ slope_val = slope(d2, d1, y2, y1)
 
 #define energy lower bounds
 #a little dictionary of the lines i need to find soon: {'511': (500, 520),'596': (585, 605),'607': (596, 617),'438': (427, 447),'175': (164, 186),'93': (82, 104)}
-lower_bounds = 'INSERT BOUND'
-upper_bounds = 'INSERT BOUND'
-slim_lower = 'INSERT BOUND'
-slim_upper = 'INSERT BOUND'
+lower_bounds = line - 30
+upper_bounds = line + 30
+slim_lower = line - 8
+slim_upper = line + 8
 
 mask = (df['Energy'] > lower_bounds) & (df['Energy'] < upper_bounds)
 dist = df['Energy'][mask].to_numpy()

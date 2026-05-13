@@ -58,8 +58,8 @@ pdf_lorentzian_scaled = lorentzian_scaled(x, *popt_l)
 def hyperbolic_pdf(x, mu, scale):
     return (1 / (2 * scale)) * (1 / np.cosh((x - mu) / scale)) ** 2
 
-def hyperbolic_scaled(x, mu, scale, c, d):
-    return hyperbolic_pdf(x, mu, scale) * (len(dist) * bin_width) + c * x + d
+def hyperbolic_scaled(x, mu, scale, c, d, A):
+    return hyperbolic_pdf(x, mu, scale) * (A) * (len(dist) * bin_width) + c * x + d
 
 p0 = [line, 2, slope_val, counts[peak_mask].min()]
 popt, pcov_h = curve_fit(hyperbolic_scaled, bin_centers[peak_mask], counts[peak_mask], p0=p0, bounds=([slim_lower, 0.1, -500, -1e6], [slim_upper, 10, 0, 1e6]), maxfev=10000)

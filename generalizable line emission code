@@ -61,8 +61,8 @@ def hyperbolic_pdf(x, mu, scale):
 def hyperbolic_scaled(x, mu, scale, c, d, A):
     return hyperbolic_pdf(x, mu, scale) * (A) * (len(dist) * bin_width) + c * x + d
 
-p0 = [line, 2, slope_val, counts[peak_mask].min()]
-popt, pcov_h = curve_fit(hyperbolic_scaled, bin_centers[peak_mask], counts[peak_mask], p0=p0, bounds=([slim_lower, 0.1, -500, -1e6], [slim_upper, 10, 0, 1e6]), maxfev=10000)
+p0 = [line, 2, slope_val, counts[peak_mask].min(), 1000]
+popt, pcov_h = curve_fit(hyperbolic_scaled, bin_centers[peak_mask], counts[peak_mask], p0=p0, bounds=([slim_lower, 0.1, -500, -1e6, 0], [slim_upper, 10, 0, 1e6, np.inf]), maxfev=10000)
 p_err_h = np.sqrt(np.diag(pcov_h))
 x3 = np.linspace(lower_bounds, upper_bounds, 1001)
 fitted_model_h = hyperbolic_scaled(x3, *popt)

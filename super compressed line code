@@ -1,89 +1,77 @@
-#import packages and dataset
-import pandas as pd 
-import scipy.stats as stats
-import os
-import matplotlib.pyplot as plt
-from scipy.optimize import curve_fit
-from scipy.stats import norm, cauchy
-import numpy as np
-
-df = pd.read_parquet('/Users/laurencadle/Downloads/singlesites.parquet')
-df.head(10)
-
-#super compressed code - writing the functions!!
+#super compressed code!!
 line = 'INSERT LINE'
 N = 2000
 
-def bounds(line, viewing = 30, plotting = 8):
-    lower = line - viewing
-    upper = line + viewing
-    s_low= line - plotting
-    s_up = line + plotting
+#change to window
+def get_bounds(line, viewing_window = 30, fitting_window = 20):
+    lower_bound = line - viewing_window
+    upper_bound = line + viewing_window
+    fitted_lower= line - fitting_window
+    fitted_upper = line + fitting_window
     
-    return lower, upper, s_low, s_up
+    return lower_bound, upper_bound, fitted_lower, fitted_upper
 
 #first fish to fry is the mask, bins, counts, and bin_edges
 energy = df['Energy'].to_numpy()
 
-def bin_sorting(N, energy):
-    counts, bin_edges = np.histogram(energy, bins=N)
+def bin_sorting(N, energy, lower_bound, upper_bound):
+    counts, bin_edges = np.histogram(energy, bins=(np.linspace(lower_bound, upper_bound, N))) #call np.hist and energy over np.linspace over thw iendow size i want. this elimates the masking codes
     bin_width = bin_edges[1] - bin_edges[0]
-    x = np.linspace(bin_edges[0], bin_edges[-1], N)
     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
     
-    return counts, bin_edges, bin_width, x, bin_centers
+    return counts, bin_edges, bin_width, bin_centers
+
+print(counts.max())
+print(counts.min())
 
 def slope(d2, d1, y2, y1):
     return (y2 - y1) / (d2 - d1)
 
-def masks(lower, upper, s_low, s_up, bin_centers, energy):
-    mask = (energy > lower) & (energy < upper)
-    dist = energy[mask]
-    peak_mask = (bin_centers > s_low) & (bin_centers < s_up)
+#make variable names and function names more precise
+def get_masks(fitted_lower, fitted_upper, bin_centers):
+    peak_mask = (bin_centers > fitted_lower) & (bin_centers < fitted_upper)
     
-    return mask, dist, peak_mask
+    return peak_mask
 
 #now lets compress the gaussian plotting function
-def gaussian_plot(dist, bin_width):
-    def gaussian_scaled(x, mu, sigma, c, d, A):
-        return norm.pdf(x, mu, sigma) * (A) * (len(dist) * bin_width) + c * x + d
-    return gaussian_scaled
-        
-#fitting the gaussian to the peak
-def fit_peak(gaussian_scaled, line, counts, peak_mask, bin_centers, slope_val, lower, upper, s_low, s_up, x):
-    p0_gauss = [line, 2, slope_val, counts[peak_mask].min(), 1000]
-    popt_g, pcov_g = curve_fit(gaussian_scaled, bin_centers[peak_mask], counts[peak_mask], p0=p0_gauss, bounds=([s_low, 0.1, -500, -1e6, 0], [s_up, 10, 0, 1e6, np.inf]), maxfev=10000)
-    p_err_g = np.sqrt(np.diag(pcov_g))
-    x1 = np.linspace(lower, upper, 1001)
-    fitted_model_g = gaussian_scaled(x1, *popt_g)
-    pdf_gaussian_scaled = gaussian_scaled(x, *popt_g)
+#rewrite with defintion of a gaussian function
+def function(x, mu, sigma, c, d, A):
+    gaussian = 1 / (sigma*np.sqrt(2*np.pi)) * np.exp(-0.5*((x-mu)/sigma)**2)
     
-    return popt_g, pcov_g, p_err_g, x1, fitted_model_g, pdf_gaussian_scaled
+    return gaussian * (A) + c * x + d
+    
+#fitting the gaussian to the peak
+def fit_peak(function, line, counts, peak_mask, bin_centers, slope_val, lower_bound, upper_bound, fitted_lower, fitted_upper):
+    p0_gauss = [line, 2, slope_val, counts[peak_mask].min(), 10000]
+    popt, pcov = curve_fit(function, bin_centers[peak_mask], counts[peak_mask], p0=p0_gauss, bounds=([fitted_lower, 1, 3*slope_val, 0, 0], [fitted_upper, 10, 0, 1e6, np.inf]), maxfev=10000) #500 into 3 slope_val, -1e6 into 0,
+    p_err= np.sqrt(np.diag(pcov))
+    x1 = np.linspace(lower_bound, upper_bound, 1001)
+    fitted_model_g = function(x1, *popt)
+    
+    return popt, pcov, p_err, x1, fitted_model_g
 
-def plot_gaussian(line, counts, bin_edges, x1, fitted_model_g, popt_g, lower, upper, s_low, s_up, ylim=(0, 1e5)):
+def plot_gaussian(line, counts, bin_edges, x1, fitted_model_g, popt, lower_bound, upper_bound, fitted_lower, fitted_upper, ylim=(0, 1e5)):
     plt.figure(figsize=(10, 8))
-    plt.stairs(counts, bin_edges, fill=True, color='turquoise', edgecolor='black', alpha=0.6, label='Data', linewidth=0.8)
-    plt.title(f'Gaussian fit for the {line} keV activation line')
-    plt.plot(x1, fitted_model_g, color='mediumvioletred',
-              label=f'Gaussian\npeak = {popt_g[0]:.2f}, std = {popt_g[1]:.2f}, c = {popt_g[2]:.2f}, d = {popt_g[3]:.2f}')
+    plt.stairs(counts, bin_edges, fill=True, color='turquoise', alpha=0.6, label='Data', linewidth=0.8)
+    plt.title(f'Gaussian fit for the {line} keV activation line (bins = {N}, fitting window = +/- 20 keV)')
+    plt.plot(x1, fitted_model_g, color='mediumvioletred', label=f'Gaussian\npeak = {popt[0]:.2f}, std = {popt[1]:.2f}, c = {popt[2]:.2f}, d = {popt[3]:.2f}')
     plt.xlabel('Energy')
     plt.ylabel('Counts')
-    plt.xlim(lower, upper)
+    plt.xlim(lower_bound, upper_bound)
     plt.ylim(*ylim)
-    plt.axvspan(s_low, s_up, alpha=0.12, color='grey', label=f'Fit window ({s_low}–{s_up} keV)')
+    plt.axvspan(fitted_lower, fitted_upper, alpha=0.12, color='grey', label=f'Fit window ({fitted_lower}–{fitted_upper} keV)')
     plt.legend()
     plt.tight_layout()
     plt.show()
 
-#ten line code (with the written functions!!
-line = 511
-N = 2000
+#ten line code!!
+line = 198
+N = 300
 
-lower, upper, s_low, s_up = bounds(line)
-counts, bin_edges, bin_width, x, bin_centers = bin_sorting(N, energy)
+lower_bound, upper_bound, fitted_lower, fitted_upper = get_bounds(line)
+counts, bin_edges, bin_width, bin_centers = bin_sorting(N, energy, lower_bound, upper_bound)
 slope_val = slope(bin_edges[-1], bin_edges[0], counts[-1], counts[0])
-mask, dist, peak_mask = masks(lower, upper, s_low, s_up, bin_centers, energy)
-gaussian_scaled = gaussian_plot(dist, bin_width)
-popt_g, pcov_g, p_err_g, x1, fitted_model_g, pdf_gaussian_scaled = fit_peak(gaussian_scaled, line, counts, peak_mask, bin_centers, slope_val, lower, upper, s_low, s_up, x)
-print(f"Gaussian: mu={popt_g[0]:.3f}±{p_err_g[0]:.3f}, width={popt_g[1]:.3f}±{p_err_g[1]:.3f}, "f"c={popt_g[2]:.3f}±{p_err_g[2]:.3f}, d={popt_g[3]:.3f}±{p_err_g[3]:.3f}")
-plot_gaussian(line, counts, bin_edges, x1, fitted_model_g, popt_g, lower, upper, s_low, s_up, ylim=(0, 50000))
+peak_mask = get_masks(fitted_lower, fitted_upper, bin_centers)
+popt, pcov, p_err, x1, fitted_model_g = fit_peak(function, line, counts, peak_mask, bin_centers, slope_val, lower_bound, upper_bound, fitted_lower, fitted_upper)
+print(f"Gaussian: mu={popt[0]:.3f}±{p_err[0]:.3f}, width={popt[1]:.3f}±{p_err[1]:.3f}, "f"c={popt[2]:.3f}±{p_err[2]:.3f}, d={popt[3]:.3f}±{p_err[3]:.3f}")
+plot_gaussian(line, counts, bin_edges, x1, fitted_model_g, popt, lower_bound, upper_bound, fitted_lower, fitted_upper, ylim=(0, 30000))

@@ -1,9 +1,7 @@
 #super compressed code!!
-line = 'INSERT LINE'
-N = 2000
 
 #change to window
-def get_bounds(line, viewing_window = 30, fitting_window = 20):
+def get_bounds(line, viewing_window = 30, fitting_window = 5):
     lower_bound = line - viewing_window
     upper_bound = line + viewing_window
     fitted_lower= line - fitting_window
@@ -21,8 +19,8 @@ def bin_sorting(N, energy, lower_bound, upper_bound):
     
     return counts, bin_edges, bin_width, bin_centers
 
-print(counts.max())
-print(counts.min())
+#print(counts.max())
+#print(counts.min())
 
 def slope(d2, d1, y2, y1):
     return (y2 - y1) / (d2 - d1)
@@ -34,26 +32,26 @@ def get_masks(fitted_lower, fitted_upper, bin_centers):
     return peak_mask
 
 #now lets compress the gaussian plotting function
-#rewrite with defintion of a gaussian function
-def function(x, mu, sigma, c, d, A):
+def gaussian_func(x, mu, sigma, c, d, A):
     gaussian = 1 / (sigma*np.sqrt(2*np.pi)) * np.exp(-0.5*((x-mu)/sigma)**2)
     
     return gaussian * (A) + c * x + d
     
 #fitting the gaussian to the peak
-def fit_peak(function, line, counts, peak_mask, bin_centers, slope_val, lower_bound, upper_bound, fitted_lower, fitted_upper):
+def fit_peak(gaussian_func, line, counts, peak_mask, bin_centers, slope_val, fitted_lower, fitted_upper):
     p0_gauss = [line, 2, slope_val, counts[peak_mask].min(), 10000]
-    popt, pcov = curve_fit(function, bin_centers[peak_mask], counts[peak_mask], p0=p0_gauss, bounds=([fitted_lower, 1, 3*slope_val, 0, 0], [fitted_upper, 10, 0, 1e6, np.inf]), maxfev=10000) #500 into 3 slope_val, -1e6 into 0,
+    popt, pcov = curve_fit(gaussian_func, bin_centers[peak_mask], counts[peak_mask], p0=p0_gauss, bounds=([fitted_lower, 1, 3*slope_val, 0, 0], [fitted_upper, 10, 0, 1e6, np.inf]), maxfev=10000) #500 into 3 slope_val, -1e6 into 0,
     p_err= np.sqrt(np.diag(pcov))
-    x1 = np.linspace(lower_bound, upper_bound, 1001)
-    fitted_model_g = function(x1, *popt)
     
-    return popt, pcov, p_err, x1, fitted_model_g
+    return popt, pcov, p_err 
 
 def plot_gaussian(line, counts, bin_edges, x1, fitted_model_g, popt, lower_bound, upper_bound, fitted_lower, fitted_upper, ylim=(0, 1e5)):
+    x1 = np.linspace(lower_bound, upper_bound, 1001)
+    fitted_model_g = gaussian_func(x1, *popt)
+   
     plt.figure(figsize=(10, 8))
     plt.stairs(counts, bin_edges, fill=True, color='turquoise', alpha=0.6, label='Data', linewidth=0.8)
-    plt.title(f'Gaussian fit for the {line} keV activation line (bins = {N}, fitting window = +/- 20 keV)')
+    plt.title(f'Gaussian fit for the {line} keV activation line (bins = {N}, fitting window = +/- 5 keV)')
     plt.plot(x1, fitted_model_g, color='mediumvioletred', label=f'Gaussian\npeak = {popt[0]:.2f}, std = {popt[1]:.2f}, c = {popt[2]:.2f}, d = {popt[3]:.2f}')
     plt.xlabel('Energy')
     plt.ylabel('Counts')
@@ -63,15 +61,16 @@ def plot_gaussian(line, counts, bin_edges, x1, fitted_model_g, popt, lower_bound
     plt.legend()
     plt.tight_layout()
     plt.show()
+    return x1, fitted_model_g
 
 #ten line code!!
-line = 198
+line = 175
 N = 300
 
 lower_bound, upper_bound, fitted_lower, fitted_upper = get_bounds(line)
 counts, bin_edges, bin_width, bin_centers = bin_sorting(N, energy, lower_bound, upper_bound)
 slope_val = slope(bin_edges[-1], bin_edges[0], counts[-1], counts[0])
 peak_mask = get_masks(fitted_lower, fitted_upper, bin_centers)
-popt, pcov, p_err, x1, fitted_model_g = fit_peak(function, line, counts, peak_mask, bin_centers, slope_val, lower_bound, upper_bound, fitted_lower, fitted_upper)
+popt, pcov, p_err = fit_peak(gaussian_func, line, counts, peak_mask, bin_centers, slope_val, fitted_lower, fitted_upper)
 print(f"Gaussian: mu={popt[0]:.3f}±{p_err[0]:.3f}, width={popt[1]:.3f}±{p_err[1]:.3f}, "f"c={popt[2]:.3f}±{p_err[2]:.3f}, d={popt[3]:.3f}±{p_err[3]:.3f}")
-plot_gaussian(line, counts, bin_edges, x1, fitted_model_g, popt, lower_bound, upper_bound, fitted_lower, fitted_upper, ylim=(0, 30000))
+x1, fitted_model_g = plot_gaussian(line, counts, bin_edges, x1, fitted_model_g, popt, lower_bound, upper_bound, fitted_lower, fitted_upper, ylim=(0, 30000))

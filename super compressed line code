@@ -1,4 +1,5 @@
 #super compressed code!!
+#note: stored inside a py script and must be called using: from spurs_2026.spurs_funcs import *
 
 #change to window
 def get_bounds(line, viewing_window = 30, fitting_window = 5):

@@ -1,3 +1,50 @@
+import pandas as pd 
+import scipy.stats as stats
+import os
+import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
+from scipy.stats import norm, cauchy
+import numpy as np
+
+'''data gathered over one day (84600 secs)
+divide the counts value by #seconds and then divide by the bin width (#/s/kev)'''
+df = pd.read_parquet('/Users/laurencadle/Downloads/singlesites.parquet')
+df.head(10)
+
+#energy distribution and activation lines
+'''looking for activation lines and peaks. next step: plot out peaks and fit a couple of different curves, try to fit something to the 511kev line,
+gaussian on 511 and 694 - try hyperbolic'''
+
+plt.figure(figsize=(10, 6))
+plt.hist(df['Energy'], bins=500, color = 'turquoise', edgecolor = 'black')
+plt.title('Energy Distribution with Activation Lines')
+plt.xlabel('Energy (keV)')
+plt.ylabel('Counts')
+
+x7 = 93
+x8 = 175
+x1 = 437
+x2 = 511
+x3 = 596
+x4 = 694
+x5 = 835
+x6 = 1018
+
+plt.axvline(x=x7, color='darkblue', linestyle='--', label=f'{x7} keV')
+plt.axvline(x=x8, color='crimson', linestyle='--', label=f'{x8} keV')  
+plt.axvline(x=x1, color='saddlebrown', linestyle='--', label=f'{x1} keV')
+plt.axvline(x=x2, color='red', linestyle='--', label=f'{x2} keV')
+plt.axvline(x=x3, color='gold', linestyle='--', label=f'{x3} keV')
+plt.axvline(x=x4, color='blue', linestyle='--', label=f'{x4} keV')
+plt.axvline(x=x5, color='green', linestyle='--', label=f'{x5} keV')
+plt.axvline(x=x6, color='blueviolet', linestyle='--', label=f'{x6} keV') 
+
+plt.xlim(0, 1200)
+plt.ylim(1e4, 1500000)
+plt.yscale('log')
+plt.legend()
+plt.show()
+
 #GENERALIZABLE LINE EMISSION CODE!!!!
 
 #choose the line of interest
@@ -85,4 +132,16 @@ plt.ylim(0, 1e5)
 plt.axvspan(slim_lower, slim_upper, alpha=0.12, color='grey', label=f'Fit window ({slim_lower}–{slim_upper} keV)')
 plt.legend()
 plt.tight_layout()
+plt.show()
+
+#energy vs detector id
+'''try and see density (hist) of this
+try and plot the same thing for each of the 12 detectors'''
+plt.figure(figsize=(10, 6))
+#plt.scatter(df['Detector ID'], df['Energy'], color='turquoise', marker='o', edgecolor = 'black', alpha=0.6)
+plt.hist(sorted(df['Detector ID']))
+
+plt.title('Energy vs Detector ID')
+plt.xlabel('Detector ID')
+plt.ylabel('Energy (keV)')
 plt.show()

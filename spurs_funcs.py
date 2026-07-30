@@ -51,9 +51,13 @@ def fit_peak(gaussian_func, line, counts, peak_mask, bin_centers, slope_val, fit
     
     return popt, pcov, p_err
 
-def plot_gaussian(line, N, p_err, counts, bin_edges, popt, lower_bound, upper_bound, fitted_lower, fitted_upper, fitting_window, ylim=(0, 1e5)):
+def plot_gaussian(line, N, p_err, counts, bin_edges, bin_centers,popt, lower_bound, upper_bound, fitted_lower, fitted_upper, fitting_window, ylim=None):
     x1 = np.linspace(lower_bound, upper_bound, 1001)
     fitted_model_g = gaussian_func(x1, *popt)
+    
+    if ylim is None:
+        peak_mask = get_masks(fitted_lower, fitted_upper, bin_centers)
+        ylim = (counts.min() * 0.96, counts[peak_mask].max() * 1.05)
    
     plt.figure(figsize=(10, 8))
     plt.stairs(counts, bin_edges, fill=True, color='turquoise', alpha=0.6, label='Data', linewidth=0.8)
@@ -90,27 +94,11 @@ def plot_quadratic(line, N, p_err, counts, bin_edges, popt, lower_bound, upper_b
     plt.show()
     return x1, fitted_model_g
 
-def snr(popt_g, counts, bin_centers):
-    mu, sigma, c, d, A = popt_g
-    lower = mu - 1.4*sigma
-    upper = mu + 1.4*sigma
-    
-    window_mask = (bin_centers > lower) & (bin_centers < upper)
-    window_totals = np.sum(counts[window_mask])
-    background_in_window = np.sum(c * bin_centers[window_mask] + d)
-    
-    S = window_totals - background_in_window
-    B = background_in_window
-    
-    return S / np.sqrt(S + B)
-
-
-#def snr(popt_g, counts, bin_width):
-    mu, sigma, c, d, A = popt_g
-    total_counts = np.sum(counts)
-    lower = mu - 1.4*sigma
-    upper = mu + 1.4*sigma
+def snr(popt, bin_width, sigma_window=1.4):
+    mu, sigma, c, d, A = popt
+    lower = mu - sigma_window *sigma
+    upper = mu + sigma_window *sigma
     h = upper - lower
-    S = (norm.cdf(upper, mu, sigma) - norm.cdf(lower, mu, sigma)) * A * total_counts * bin_width
+    S = (norm.cdf(upper, mu, sigma) - norm.cdf(lower, mu, sigma)) * A * bin_width
     B = 1/2 * ((c*lower + d) + (c*upper + d)) * h
     return S / np.sqrt(S + B)
